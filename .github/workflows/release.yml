@@ -1,0 +1,62 @@
+name: Release (reusable)
+
+# Call on push of a v* tag. Builds the Arch package, attaches it to the
+# GitHub Release, pokes COPR (if a webhook URL secret is set), and asks
+# arch-repo to republish (if a dispatch token secret is set — otherwise
+# arch-repo picks the release up on its next scheduled run).
+
+on:
+  workflow_call:
+    inputs:
+      pkgbuild-dir:
+        type: string
+        default: packaging
+    secrets:
+      COPR_WEBHOOK_URL:
+        description: COPR custom-webhook URL for this package (optional)
+        required: false
+      ARCH_REPO_TOKEN:
+        description: Fine-grained PAT allowed to send repository_dispatch to arch-repo (optional)
+        required: false
+
+jobs:
+  arch-package:
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/arch-package.yml@main
+    permissions:
+      contents: write
+    with:
+      pkgbuild-dir: ${{ inputs.pkgbuild-dir }}
+      publish: true
+
+  copr:
+    name: Trigger COPR build
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST the COPR webhook
+        env:
+          COPR_WEBHOOK_URL: ${{ secrets.COPR_WEBHOOK_URL }}
+        run: |
+          if [ -z "$COPR_WEBHOOK_URL" ]; then
+            echo "COPR_WEBHOOK_URL not configured — skipping (COPR can also trigger off its own GitHub webhook)"
+            exit 0
+          fi
+          curl -fsS -X POST "$COPR_WEBHOOK_URL"
+
+  update-arch-repo:
+    name: Republish arch-repo
+    needs: arch-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: repository_dispatch to MasonRhodesDev/arch-repo
+        env:
+          TOKEN: ${{ secrets.ARCH_REPO_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "ARCH_REPO_TOKEN not configured — arch-repo will pick this release up on its scheduled run"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/MasonRhodesDev/arch-repo/dispatches \
+            -d '{"event_type":"package-released"}'

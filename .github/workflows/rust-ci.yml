@@ -1,0 +1,41 @@
+name: Rust CI (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      pacman-deps:
+        description: Extra Arch packages needed to build (space-separated)
+        type: string
+        default: ''
+      cargo-flags:
+        description: Extra cargo flags applied to clippy/test/build (e.g. --features tray)
+        type: string
+        default: ''
+
+jobs:
+  ci:
+    name: fmt → clippy → test → build
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install toolchain and build deps
+        run: pacman -Syu --noconfirm --needed base-devel rust git ${{ inputs.pacman-deps }}
+
+      - uses: actions/checkout@v4
+
+      - name: Trust the checkout (container runs as root)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked ${{ inputs.cargo-flags }} -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked ${{ inputs.cargo-flags }}
+
+      - name: Build
+        run: cargo build --release --workspace --locked ${{ inputs.cargo-flags }}
