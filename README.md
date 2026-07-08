@@ -49,6 +49,26 @@ jobs:
 
 ## Release flow (any repo)
 
+```mermaid
+flowchart TD
+    tag["tool repo: git push tag vX.Y.Z"]
+
+    subgraph releasewf ["release.yml (workflow_call)"]
+        archpkg["job arch-package: calls arch-package.yml — version gate (tag = pkgver = Cargo.toml), git archive HEAD snapshot, makepkg, namcap"]
+        coprjob["job copr"]
+        update["job update-arch-repo (needs: arch-package)"]
+        archpkg --> update
+    end
+
+    tag -->|"thin caller: uses packaging-workflows/release.yml@main, secrets: inherit"| releasewf
+    archpkg -->|"publish: true — gh release create + upload"| asset["GitHub Release asset (.pkg.tar.zst)"]
+    coprjob -->|"POST COPR_WEBHOOK_URL (if set)"| coprbuild["COPR build"]
+    update -->|"repository_dispatch: package-released with ARCH_REPO_TOKEN (else 6h cron)"| publish["arch-repo publish.yml"]
+    asset -->|"gh release download '*.pkg.tar.zst'"| publish
+    publish -->|"repo-add + deploy-pages"| pages["GitHub Pages x86_64 repo"]
+    pages -->|"pacman -Syu"| pacuser["user pacman ([mason] repo)"]
+```
+
 1. Bump version (Cargo.toml + spec + PKGBUILD `pkgver`) — one commit.
 2. `git tag vX.Y.Z && git push --tags`
 3. CI builds and attaches the `.pkg.tar.zst`, COPR rebuilds off its webhook,
