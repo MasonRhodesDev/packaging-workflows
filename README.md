@@ -10,7 +10,7 @@ place to fix CI for every repo.
 | `rust-ci.yml` | fmt → clippy → test → build in an `archlinux` container | `pacman-deps`, `cargo-flags` |
 | `arch-package.yml` | `makepkg` from a HEAD snapshot + namcap; optionally uploads to the tag's GitHub Release | `pkgbuild-dir`, `publish` |
 | `rpm-check.yml` | SRPM from HEAD → `rpmbuild --rebuild` (runs `%check`) → gating rpmlint in a `fedora` container | `spec-name` |
-| `release.yml` | On tag: Arch package → Release asset, POST COPR webhook, dispatch arch-repo republish | `pkgbuild-dir`; secrets `COPR_WEBHOOK_URL`, `ARCH_REPO_TOKEN` (both optional) |
+| `release.yml` | On tag: Arch package → Release asset, POST COPR webhook, dispatch arch-repo republish | `pkgbuild-dir`; secrets `COPR_CONFIG` (copr-cli token file; SRPM built+submitted in CI, expires ~180d), `COPR_WEBHOOK_URL` (fallback), `ARCH_REPO_TOKEN` (all optional) |
 | `security.yml` | cargo-deny (advisories/licenses/bans/sources) | — |
 
 ## Per-repo contract
@@ -62,7 +62,7 @@ flowchart TD
 
     tag -->|"thin caller: uses packaging-workflows/release.yml@main, secrets: inherit"| releasewf
     archpkg -->|"publish: true — gh release create + upload"| asset["GitHub Release asset (.pkg.tar.zst)"]
-    coprjob -->|"POST COPR_WEBHOOK_URL (if set)"| coprbuild["COPR build"]
+    coprjob -->|"copr-cli submit (COPR_CONFIG) or webhook POST"| coprbuild["COPR build"]
     update -->|"repository_dispatch: package-released with ARCH_REPO_TOKEN (else 6h cron)"| publish["arch-repo publish.yml"]
     asset -->|"gh release download '*.pkg.tar.zst'"| publish
     publish -->|"repo-add + deploy-pages"| pages["GitHub Pages x86_64 repo"]

@@ -12,8 +12,11 @@ on:
         type: string
         default: packaging
     secrets:
+      COPR_CONFIG:
+        description: Content of ~/.config/copr (copr-cli token file) — builds the SRPM in CI and submits it directly (optional; note the token expires ~180 days)
+        required: false
       COPR_WEBHOOK_URL:
-        description: COPR custom-webhook URL for this package (optional)
+        description: COPR custom-webhook URL for this package (optional fallback when COPR_CONFIG is unset)
         required: false
       ARCH_REPO_TOKEN:
         description: Fine-grained PAT allowed to send repository_dispatch to arch-repo (optional)
@@ -29,18 +32,31 @@ jobs:
       publish: true
 
   copr:
-    name: Trigger COPR build
+    name: Publish to COPR
     runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:42
     steps:
-      - name: POST the COPR webhook
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Build SRPM and submit with copr-cli (or fall back to webhook)
         env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
           COPR_WEBHOOK_URL: ${{ secrets.COPR_WEBHOOK_URL }}
         run: |
-          if [ -z "$COPR_WEBHOOK_URL" ]; then
-            echo "COPR_WEBHOOK_URL not configured — skipping (COPR can also trigger off its own GitHub webhook)"
-            exit 0
+          if [ -n "$COPR_CONFIG" ]; then
+            dnf -y install copr-cli rpm-build rpmlint rust cargo git-core curl-minimal
+            mkdir -p ~/.config
+            printf '%s' "$COPR_CONFIG" > ~/.config/copr
+            chmod 600 ~/.config/copr
+            git config --global --add safe.directory "$GITHUB_WORKSPACE"
+            bash packaging/build-srpm.sh --copr
+          elif [ -n "$COPR_WEBHOOK_URL" ]; then
+            curl -fsS -X POST "$COPR_WEBHOOK_URL"
+          else
+            echo "Neither COPR_CONFIG nor COPR_WEBHOOK_URL configured — skipping COPR publish"
           fi
-          curl -fsS -X POST "$COPR_WEBHOOK_URL"
 
   update-arch-repo:
     name: Republish arch-repo
