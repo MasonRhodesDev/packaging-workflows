@@ -36,6 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:42
     steps:
+      # Install git BEFORE checkout: in a container job actions/checkout
+      # otherwise falls back to an API tarball (no .git, no tags) and
+      # build-srpm.sh's tag gate fails with "not a git repository".
+      - name: Install build tooling
+        run: dnf -y install git-core copr-cli rpm-build rpmlint rust cargo curl-minimal
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -46,11 +51,10 @@ jobs:
           COPR_WEBHOOK_URL: ${{ secrets.COPR_WEBHOOK_URL }}
         run: |
           if [ -n "$COPR_CONFIG" ]; then
-            dnf -y install copr-cli rpm-build rpmlint rust cargo git-core curl-minimal
+            git config --global --add safe.directory "$(pwd)"
             mkdir -p ~/.config
             printf '%s' "$COPR_CONFIG" > ~/.config/copr
             chmod 600 ~/.config/copr
-            git config --global --add safe.directory "$GITHUB_WORKSPACE"
             bash packaging/build-srpm.sh --copr
           elif [ -n "$COPR_WEBHOOK_URL" ]; then
             curl -fsS -X POST "$COPR_WEBHOOK_URL"
