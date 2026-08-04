@@ -49,10 +49,13 @@ jobs:
       - name: Snapshot source tarball from HEAD
         run: |
           cd "${{ inputs.pkgbuild-dir }}"
-          pkgname=$(sed -n 's/^pkgname=//p' PKGBUILD)
+          # Split packages: source tarball is named after pkgbase; scalar
+          # single-package repos have no pkgbase= line, fall back to pkgname=.
+          pkgbase=$(sed -n 's/^pkgbase=//p' PKGBUILD)
+          [ -n "$pkgbase" ] || pkgbase=$(sed -n 's/^pkgname=//p' PKGBUILD)
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
           git -C "$GITHUB_WORKSPACE" archive --format=tar.gz \
-            --prefix "$pkgname-$pkgver/" -o "$PWD/$pkgname-$pkgver.tar.gz" HEAD
+            --prefix "$pkgbase-$pkgver/" -o "$PWD/$pkgbase-$pkgver.tar.gz" HEAD
 
       - name: Build package
         run: |
