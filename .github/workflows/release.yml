@@ -11,6 +11,10 @@ on:
       pkgbuild-dir:
         type: string
         default: packaging
+      extra-repos:
+        description: Extra pacman repo sections for the Arch build (see arch-package.yml)
+        type: string
+        default: ''
     secrets:
       COPR_CONFIG:
         description: Content of ~/.config/copr (copr-cli token file) — builds the SRPM in CI and submits it directly (optional; note the token expires ~180 days)
@@ -30,6 +34,7 @@ jobs:
     with:
       pkgbuild-dir: ${{ inputs.pkgbuild-dir }}
       publish: true
+      extra-repos: ${{ inputs.extra-repos }}
 
   copr:
     name: Publish to COPR

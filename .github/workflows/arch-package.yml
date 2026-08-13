@@ -11,6 +11,13 @@ on:
         description: Upload the built package to the GitHub Release for this tag
         type: boolean
         default: false
+      extra-repos:
+        description: >-
+          Extra pacman repo sections appended to /etc/pacman.conf before
+          dependency resolution, e.g. for depends that live in the [mason]
+          repo. Newline-separated pacman.conf syntax.
+        type: string
+        default: ''
 
 jobs:
   makepkg:
@@ -18,6 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
+      - name: Configure extra pacman repos
+        if: inputs.extra-repos != ''
+        run: printf '%s\n' "${{ inputs.extra-repos }}" >> /etc/pacman.conf
+
       - name: Install build tooling
         run: pacman -Syu --noconfirm --needed base-devel git sudo namcap github-cli
 
