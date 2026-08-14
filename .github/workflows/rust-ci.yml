@@ -21,7 +21,7 @@ jobs:
       - name: Install toolchain and build deps
         run: pacman -Syu --noconfirm --needed base-devel rust git ${{ inputs.pacman-deps }}
 
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Trust the checkout (container runs as root)
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
