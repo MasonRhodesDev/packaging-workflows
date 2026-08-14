@@ -98,7 +98,7 @@ jobs:
     needs: publish-release
     if: inputs.rpm
     runs-on: ubuntu-latest
-    container: registry.fedoraproject.org/fedora:42
+    container: registry.fedoraproject.org/fedora:42@sha256:e78cd1a688cd079c23864f289a89a49a3f4ad66d817864e325e1d058310ee95c
     steps:
       # Install git BEFORE checkout: in a container job actions/checkout
       # otherwise falls back to an API tarball (no .git, no tags) and
