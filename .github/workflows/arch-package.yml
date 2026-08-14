@@ -90,6 +90,12 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare unprivileged builder
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+
       # The PKGBUILD's source entry is named $pkgname-$pkgver.tar.gz; providing
       # the file locally makes makepkg skip the download, so PR/branch builds
       # work before any tag or release exists.
@@ -104,16 +110,15 @@ jobs:
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
           git -C "$GITHUB_WORKSPACE" archive --format=tar.gz \
             --prefix "$pkgbase-$pkgver/" -o "$PWD/$pkgbase-$pkgver.tar.gz" HEAD
+          chown builder: "$PWD/$pkgbase-$pkgver.tar.gz" PKGBUILD
           # The committed checksum authenticates the immutable release archive.
           # Branch builds use a temporary HEAD snapshot, so update only the
           # runner's working copy before exercising the package build.
-          updpkgsums
+          # updpkgsums wraps makepkg, which refuses to run as root.
+          su builder -c 'updpkgsums'
 
       - name: Build package
         run: |
-          useradd -m builder
-          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
-          chown -R builder: .
           cd "${{ inputs.pkgbuild-dir }}"
           su builder -c 'makepkg -s --noconfirm'
 
