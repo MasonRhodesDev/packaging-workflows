@@ -21,12 +21,12 @@ jobs:
       - name: Install toolchain and build deps
         run: pacman -Syu --noconfirm --needed base-devel rust git ${{ inputs.pacman-deps }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Trust the checkout (container runs as root)
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
 
       - name: Format
         run: cargo fmt --all --check
