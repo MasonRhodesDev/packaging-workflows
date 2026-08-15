@@ -17,7 +17,7 @@ place to fix CI for every repo.
 
 Every packaged repo provides:
 
-- `packaging/PKGBUILD` — `source=("$pkgname-$pkgver.tar.gz::https://github.com/MasonRhodesDev/$pkgname/archive/v$pkgver.tar.gz")`, `sha256sums=('SKIP')`. CI drops a `git archive` snapshot next to it so makepkg never downloads during PR builds.
+- `packaging/PKGBUILD` — `source=("$pkgname-$pkgver.tar.gz::https://github.com/MasonRhodesDev/$pkgname/archive/v$pkgver.tar.gz")` with a real `sha256sums` of that archive (not `SKIP`; CI rejects `SKIP`). CI drops a `git archive` snapshot next to it so makepkg never downloads during PR builds.
 - `packaging/<name>.spec` + `packaging/<name>.rpmlintrc` + `packaging/build-srpm.sh` — hyprstate-style vendored-cargo SRPM build with the four-way version gate (spec = Cargo.toml = Cargo.lock = PKGBUILD).
 - `dist/` — canonical systemd units and other payload files with **packaged** paths (`/usr/bin`, never `%h/.local/bin`).
 - `.copr/Makefile` — `make srpm` entry point so COPR rebuilds on its own GitHub webhook.
@@ -31,7 +31,7 @@ name: CI
 on: { push: { branches: [main] }, pull_request: }
 jobs:
   ci:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/rust-ci.yml@main
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/rust-ci.yml@429e647539b02e85ea59b38c441f83a86ee77835
     with:
       pacman-deps: pipewire alsa-lib   # if needed
 ```
@@ -43,7 +43,7 @@ on: { push: { tags: ['v*'] } }
 permissions: { contents: write }
 jobs:
   release:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@main
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@429e647539b02e85ea59b38c441f83a86ee77835
     secrets: inherit
 ```
 
@@ -60,7 +60,7 @@ flowchart TD
         archpkg --> update
     end
 
-    tag -->|"thin caller: uses packaging-workflows/release.yml@main, secrets: inherit"| releasewf
+    tag -->|"thin caller: uses packaging-workflows/release.yml@429e647539b02e85ea59b38c441f83a86ee77835, secrets: inherit"| releasewf
     archpkg -->|"publish: true — gh release create + upload"| asset["GitHub Release asset (.pkg.tar.zst)"]
     coprjob -->|"copr-cli submit (COPR_CONFIG) or webhook POST"| coprbuild["COPR build"]
     update -->|"repository_dispatch: package-released with ARCH_REPO_TOKEN (else 6h cron)"| publish["arch-repo publish.yml"]
