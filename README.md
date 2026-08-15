@@ -12,6 +12,7 @@ place to fix CI for every repo.
 | `rpm-check.yml` | SRPM from HEAD → `rpmbuild --rebuild` (runs `%check`) → gating rpmlint in a `fedora` container | `spec-name` |
 | `release.yml` | On tag: Arch + RPM gates → GitHub Release → COPR submit → arch-repo dispatch. COPR and `ARCH_REPO_TOKEN` are required when `rpm: true`. Missing secrets fail the release. COPR projects are created from CI if absent. | `pkgbuild-dir`, `spec-name`, `rpm`, `copr-project`, `copr-enable-net`; secrets `COPR_CONFIG` (required for rpm repos; token expires ~180d), `COPR_WEBHOOK_URL` (fallback), `ARCH_REPO_TOKEN` (required) |
 | `security.yml` | cargo-deny (advisories/licenses/bans/sources) | — |
+| `crates-publish.yml` | `cargo publish --locked` on a `v*` tag | secret `CARGO_REGISTRY_TOKEN` (required; org Actions secret) |
 
 ## Per-repo contract
 
@@ -75,3 +76,17 @@ flowchart TD
    project if needed), and [arch-repo](https://github.com/MasonRhodesDev/arch-repo)
    republishes `[mason]`. Both channels are required; do not `copr-cli` from a
    laptop. Org secrets: `COPR_CONFIG`, `ARCH_REPO_TOKEN`.
+
+Crate libraries (hypr-paths, hypr-logind, hypr-ipc) publish to crates.io from
+CI, not a laptop. Org secret: `CARGO_REGISTRY_TOKEN`. Caller:
+
+```yaml
+# .github/workflows/release.yml
+name: Release
+on: { push: { tags: ['v*'] } }
+jobs:
+  crates:
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/crates-publish.yml@PIN
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+```
