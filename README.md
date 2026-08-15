@@ -31,7 +31,7 @@ name: CI
 on: { push: { branches: [main] }, pull_request: }
 jobs:
   ci:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/rust-ci.yml@43f34aaaa95951ebf71e625de3cf1207e2a259e6
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/rust-ci.yml@77a592545a6cf6b7cb1ddfc5ee07126037f4feb1
     with:
       pacman-deps: pipewire alsa-lib   # if needed
 ```
@@ -43,7 +43,7 @@ on: { push: { tags: ['v*'] } }
 permissions: { contents: write }
 jobs:
   release:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@43f34aaaa95951ebf71e625de3cf1207e2a259e6
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@77a592545a6cf6b7cb1ddfc5ee07126037f4feb1
     secrets: inherit
 ```
 
@@ -60,7 +60,7 @@ flowchart TD
         archpkg --> update
     end
 
-    tag -->|"thin caller: uses packaging-workflows/release.yml@43f34aaaa95951ebf71e625de3cf1207e2a259e6, secrets: inherit"| releasewf
+    tag -->|"thin caller: uses packaging-workflows/release.yml@77a592545a6cf6b7cb1ddfc5ee07126037f4feb1, secrets: inherit"| releasewf
     archpkg -->|"publish: true — gh release create + upload"| asset["GitHub Release asset (.pkg.tar.zst)"]
     coprjob -->|"copr-cli submit; create project if missing"| coprbuild["COPR build"]
     update -->|"repository_dispatch: package-released (ARCH_REPO_TOKEN required)"| publish["arch-repo publish.yml"]
