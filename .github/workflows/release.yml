@@ -38,7 +38,7 @@ on:
         type: boolean
         default: false
       copr-project:
-        description: COPR project name (default: NAME in packaging/build-srpm.sh)
+        description: "COPR project name (defaults to NAME in packaging/build-srpm.sh)"
         type: string
         default: ''
       copr-enable-net:
