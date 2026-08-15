@@ -1,9 +1,11 @@
 name: Release (reusable)
 
 # Call on push of a v* tag. Builds the Arch package, attaches it to the
-# GitHub Release, pokes COPR (if a webhook URL secret is set), and asks
-# arch-repo to republish (if a dispatch token secret is set — otherwise
-# arch-repo picks the release up on its next scheduled run).
+# GitHub Release, submits COPR, and dispatches arch-repo. COPR and
+# [mason] are required for rpm-enabled repos: missing COPR_CONFIG /
+# COPR_WEBHOOK_URL or ARCH_REPO_TOKEN fails the release. COPR projects
+# are created from CI when absent. rpm: false (e.g. deck-tenant) skips
+# the COPR job only.
 
 on:
   workflow_call:
@@ -35,6 +37,18 @@ on:
         description: Run cargo-deny before publishing
         type: boolean
         default: false
+      copr-project:
+        description: COPR project name (default: NAME in packaging/build-srpm.sh)
+        type: string
+        default: ''
+      copr-enable-net:
+        description: copr-cli modify --enable-net on (needed when the RPM fetches crates)
+        type: boolean
+        default: false
+      skip-head-snapshot:
+        description: Pass through to arch-package.yml for packaging-only upstream sources
+        type: boolean
+        default: false
     secrets:
       COPR_CONFIG:
         description: Content of ~/.config/copr (copr-cli token file) — builds the SRPM in CI and submits it directly (optional; note the token expires ~180 days)
@@ -57,6 +71,7 @@ jobs:
       extra-repos: ${{ inputs.extra-repos }}
       extra-repo-key-url: ${{ inputs.extra-repo-key-url }}
       extra-repo-key-fingerprint: ${{ inputs.extra-repo-key-fingerprint }}
+      skip-head-snapshot: ${{ inputs.skip-head-snapshot }}
 
   rpm-check:
     if: inputs.rpm
@@ -113,17 +128,40 @@ jobs:
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
           COPR_WEBHOOK_URL: ${{ secrets.COPR_WEBHOOK_URL }}
+          COPR_PROJECT: ${{ inputs.copr-project }}
+          COPR_ENABLE_NET: ${{ inputs.copr-enable-net }}
         run: |
+          set -euo pipefail
+          if [ -z "$COPR_CONFIG" ] && [ -z "$COPR_WEBHOOK_URL" ]; then
+            echo "::error::COPR_CONFIG or COPR_WEBHOOK_URL is required — a release must publish COPR"
+            exit 1
+          fi
           if [ -n "$COPR_CONFIG" ]; then
             git config --global --add safe.directory "$(pwd)"
             mkdir -p ~/.config
             printf '%s' "$COPR_CONFIG" > ~/.config/copr
             chmod 600 ~/.config/copr
+            if [ -z "$COPR_PROJECT" ]; then
+              COPR_PROJECT=$(sed -n 's/^NAME="\?\([^"]*\)"\?/\1/p' packaging/build-srpm.sh | head -1)
+            fi
+            if [ -z "$COPR_PROJECT" ]; then
+              echo "::error::could not determine COPR project name"
+              exit 1
+            fi
+            export COPR_PROJECT
+            if ! copr-cli list-packages "$COPR_PROJECT" >/dev/null 2>&1; then
+              echo "==> creating COPR project $COPR_PROJECT"
+              copr-cli create "$COPR_PROJECT" \
+                --chroot fedora-42-x86_64 \
+                --chroot fedora-43-x86_64 \
+                --chroot fedora-rawhide-x86_64
+            fi
+            if [ "$COPR_ENABLE_NET" = "true" ]; then
+              copr-cli modify "$COPR_PROJECT" --enable-net on
+            fi
             bash packaging/build-srpm.sh --copr
-          elif [ -n "$COPR_WEBHOOK_URL" ]; then
-            curl -fsS -X POST "$COPR_WEBHOOK_URL"
           else
-            echo "Neither COPR_CONFIG nor COPR_WEBHOOK_URL configured — skipping COPR publish"
+            curl -fsS -X POST "$COPR_WEBHOOK_URL"
           fi
 
   update-arch-repo:
@@ -136,8 +174,8 @@ jobs:
           TOKEN: ${{ secrets.ARCH_REPO_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "ARCH_REPO_TOKEN not configured — arch-repo will pick this release up on its scheduled run"
-            exit 0
+            echo "::error::ARCH_REPO_TOKEN is required — a release must republish [mason]"
+            exit 1
           fi
           curl -fsS -X POST \
             -H "Authorization: Bearer $TOKEN" \

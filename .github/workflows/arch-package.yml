@@ -26,6 +26,12 @@ on:
         description: Full fingerprint expected from extra-repo-key-url
         type: string
         default: ''
+      skip-head-snapshot:
+        description: >-
+          Do not replace PKGBUILD sources with a git-archive of this repo.
+          Use for packaging-only repos whose source= is an upstream tarball.
+        type: boolean
+        default: false
 
 jobs:
   makepkg:
@@ -100,7 +106,7 @@ jobs:
       # the file locally makes makepkg skip the download, so PR/branch builds
       # work before any tag or release exists.
       - name: Snapshot source tarball from HEAD
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !inputs.skip-head-snapshot && !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           cd "${{ inputs.pkgbuild-dir }}"
           # Split packages: source tarball is named after pkgbase; scalar
