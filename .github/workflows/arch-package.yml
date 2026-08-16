@@ -64,11 +64,7 @@ jobs:
             echo "::error::extra repository key fingerprint mismatch"
             exit 1
           fi
-          # Fresh archlinux containers have gnupg but no pacman keyring, so
-          # lsign-key fails with "no secret key available to sign with".
-          if [ ! -e /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -e /etc/pacman.d/gnupg/pubring.kbx ]; then
-            pacman-key --init
-          fi
+          pacman-key --init
           pacman-key --add /tmp/extra-repo.asc
           pacman-key --lsign-key "$KEY_FINGERPRINT"
           printf '%s\n' "$EXTRA_REPOS" >> /etc/pacman.conf
