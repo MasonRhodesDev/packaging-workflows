@@ -76,14 +76,17 @@ jobs:
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkgver=$(sed -n 's/^pkgver=//p' "${{ inputs.pkgbuild-dir }}/PKGBUILD")
-          if [ "$tag" != "$pkgver" ]; then
-            echo "::error::tag v$tag does not match PKGBUILD pkgver=$pkgver"
+          pkgrel=$(sed -n 's/^pkgrel=//p' "${{ inputs.pkgbuild-dir }}/PKGBUILD")
+          # Packaging-only rebuilds (e.g. overskride) keep upstream pkgver and
+          # tag v$pkgver-$pkgrel so a second release does not move v$pkgver.
+          if [ "$tag" != "$pkgver" ] && [ "$tag" != "${pkgver}-${pkgrel}" ]; then
+            echo "::error::tag v$tag does not match PKGBUILD pkgver=$pkgver (or pkgver-pkgrel $pkgver-$pkgrel)"
             exit 1
           fi
           if [ -f Cargo.toml ]; then
             cargo_ver=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-            if [ -n "$cargo_ver" ] && [ "$cargo_ver" != "$tag" ]; then
-              echo "::error::Cargo.toml version $cargo_ver does not match tag v$tag"
+            if [ -n "$cargo_ver" ] && [ "$cargo_ver" != "$pkgver" ]; then
+              echo "::error::Cargo.toml version $cargo_ver does not match PKGBUILD pkgver=$pkgver"
               exit 1
             fi
           fi
