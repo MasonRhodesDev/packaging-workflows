@@ -131,6 +131,7 @@ jobs:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
           COPR_WEBHOOK_URL: ${{ secrets.COPR_WEBHOOK_URL }}
           COPR_PROJECT: ${{ inputs.copr-project }}
+          SPEC_NAME: ${{ inputs.spec-name }}
           COPR_ENABLE_NET: ${{ inputs.copr-enable-net }}
         run: |
           set -euo pipefail
@@ -145,6 +146,9 @@ jobs:
             chmod 600 ~/.config/copr
             if [ -z "$COPR_PROJECT" ]; then
               COPR_PROJECT=$(sed -n 's/^NAME="\?\([^"]*\)"\?/\1/p' packaging/build-srpm.sh | head -1)
+            fi
+            if [ -z "$COPR_PROJECT" ]; then
+              COPR_PROJECT="$SPEC_NAME"
             fi
             if [ -z "$COPR_PROJECT" ]; then
               echo "::error::could not determine COPR project name"
