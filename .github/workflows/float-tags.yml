@@ -1,0 +1,33 @@
+name: Float version tags
+
+# Immutable tags are vMAJOR.MINOR.PATCH. After each of those, this job
+# moves the floating vMAJOR and vMAJOR.MINOR tags so callers on @v1 /
+# @v1.0 pick up compatible releases. Patch tags are never moved.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  float:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Point vMAJOR and vMAJOR.MINOR at this tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ver="${TAG#v}"
+          major="${ver%%.*}"
+          minor="${ver%.*}"
+          commit="$(git rev-parse "${TAG}^{commit}")"
+          git tag -f "v${major}" "$commit"
+          git tag -f "v${minor}" "$commit"
+          git push -f origin "v${major}" "v${minor}"

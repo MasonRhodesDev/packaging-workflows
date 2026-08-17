@@ -1,7 +1,31 @@
 # packaging-workflows
 
-Reusable GitHub Actions workflows shared by all MasonRhodesDev projects. One
-place to fix CI for every repo.
+Reusable GitHub Actions workflows shared by MasonRhodesDev projects. One
+place to fix CI; callers consume it as a **semver contract**, not a shared
+commit SHA.
+
+**Version:** see `VERSION`. Current major is **v1**.
+
+## Pinning (callers)
+
+```yaml
+uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@v1
+```
+
+| Ref | What you get |
+|---|---|
+| `@v1` | Latest compatible 1.x (recommended) |
+| `@v1.0` | Latest 1.0.x patch |
+| `@v1.0.0` | That release only |
+
+Do not copy one commit SHA across repos. Each caller pins a major (or
+minor) and gets compatible workflow fixes when packaging-workflows
+releases. A breaking change to `workflow_call` inputs, required secrets,
+or fail-closed behavior is a **new major** (`@v2`).
+
+Release packaging-workflows with an immutable `vMAJOR.MINOR.PATCH` tag.
+CI then moves the floating `vMAJOR` and `vMAJOR.MINOR` tags (see
+`.github/workflows/float-tags.yml`).
 
 ## Workflows
 
@@ -32,7 +56,7 @@ name: CI
 on: { push: { branches: [main] }, pull_request: }
 jobs:
   ci:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/rust-ci.yml@77a592545a6cf6b7cb1ddfc5ee07126037f4feb1
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/rust-ci.yml@v1
     with:
       pacman-deps: pipewire alsa-lib   # if needed
 ```
@@ -44,7 +68,7 @@ on: { push: { tags: ['v*'] } }
 permissions: { contents: write }
 jobs:
   release:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@77a592545a6cf6b7cb1ddfc5ee07126037f4feb1
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@v1
     secrets: inherit
 ```
 
@@ -61,7 +85,7 @@ flowchart TD
         archpkg --> update
     end
 
-    tag -->|"thin caller: uses packaging-workflows/release.yml@77a592545a6cf6b7cb1ddfc5ee07126037f4feb1, secrets: inherit"| releasewf
+    tag -->|"thin caller: uses packaging-workflows/release.yml@v1, secrets: inherit"| releasewf
     archpkg -->|"publish: true — gh release create + upload"| asset["GitHub Release asset (.pkg.tar.zst)"]
     coprjob -->|"copr-cli submit; create project if missing"| coprbuild["COPR build"]
     update -->|"repository_dispatch: package-released (ARCH_REPO_TOKEN required)"| publish["arch-repo publish.yml"]
@@ -86,7 +110,7 @@ name: Release
 on: { push: { tags: ['v*'] } }
 jobs:
   crates:
-    uses: MasonRhodesDev/packaging-workflows/.github/workflows/crates-publish.yml@f67c5bf5f935799761fe13d46ac7baa0e73689e5
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/crates-publish.yml@v1
     secrets:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 ```
