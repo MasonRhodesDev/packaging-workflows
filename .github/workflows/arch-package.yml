@@ -68,6 +68,10 @@ jobs:
           pacman-key --add /tmp/extra-repo.asc
           pacman-key --lsign-key "$KEY_FINGERPRINT"
           printf '%s\n' "$EXTRA_REPOS" >> /etc/pacman.conf
+          # The repository is appended after the base system upgrade above,
+          # so its database is not present yet.  Synchronize before makepkg
+          # asks pacman to resolve dependencies from the newly trusted repo.
+          pacman -Sy --noconfirm
 
       - name: Trust the checkout (container runs as root)
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
