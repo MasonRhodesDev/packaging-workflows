@@ -158,8 +158,8 @@ jobs:
             if ! copr-cli list-packages "$COPR_PROJECT" >/dev/null 2>&1; then
               echo "==> creating COPR project $COPR_PROJECT"
               copr-cli create "$COPR_PROJECT" \
-                --chroot fedora-42-x86_64 \
                 --chroot fedora-43-x86_64 \
+                --chroot fedora-44-x86_64 \
                 --chroot fedora-rawhide-x86_64
             fi
             if [ "$COPR_ENABLE_NET" = "true" ]; then
