@@ -101,7 +101,7 @@ flowchart TD
    republishes `[mason]`. Both channels are required; do not `copr-cli` from a
    laptop. Org secrets: `COPR_CONFIG`, `ARCH_REPO_TOKEN`.
 
-Crate libraries (hypr-paths, hypr-logind, hypr-ipc) publish to crates.io from
+Crate libraries (xdg-paths, logind-session, hypr-ipc) publish to crates.io from
 CI, not a laptop. Org secret: `CARGO_REGISTRY_TOKEN`. Caller:
 
 ```yaml

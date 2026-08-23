@@ -1,6 +1,6 @@
 name: crates.io publish (reusable)
 
-# Call on push of a v* tag from a public crate repo (hypr-paths, hypr-logind,
+# Call on push of a v* tag from a public crate repo (xdg-paths, logind-session,
 # hypr-ipc). Missing CARGO_REGISTRY_TOKEN fails the job. Do not cargo publish
 # from a laptop.
 
