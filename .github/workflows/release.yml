@@ -37,6 +37,13 @@ on:
         description: Run cargo-deny before publishing
         type: boolean
         default: false
+      extra-copr-repos:
+        description: >-
+          Whitespace-separated owner/project COPR repos needed to resolve
+          BuildRequires outside Fedora proper. Enabled in the rpm-check
+          container and attached to the COPR project as external repos.
+        type: string
+        default: ''
       copr-project:
         description: "COPR project name (defaults to NAME in packaging/build-srpm.sh)"
         type: string
@@ -78,6 +85,7 @@ jobs:
     uses: ./.github/workflows/rpm-check.yml
     with:
       spec-name: ${{ inputs.spec-name }}
+      extra-copr-repos: ${{ inputs.extra-copr-repos }}
 
   security:
     if: inputs.security
@@ -133,6 +141,7 @@ jobs:
           COPR_PROJECT: ${{ inputs.copr-project }}
           SPEC_NAME: ${{ inputs.spec-name }}
           COPR_ENABLE_NET: ${{ inputs.copr-enable-net }}
+          EXTRA_COPR_REPOS: ${{ inputs.extra-copr-repos }}
         run: |
           set -euo pipefail
           if [ -z "$COPR_CONFIG" ] && [ -z "$COPR_WEBHOOK_URL" ]; then
@@ -164,6 +173,15 @@ jobs:
             fi
             if [ "$COPR_ENABLE_NET" = "true" ]; then
               copr-cli modify "$COPR_PROJECT" --enable-net on
+            fi
+            if [ -n "$EXTRA_COPR_REPOS" ]; then
+              # --repo REPLACES the external-repo list, so pass the full
+              # desired set each run (idempotent).
+              repo_args=()
+              for r in $EXTRA_COPR_REPOS; do
+                repo_args+=(--repo "copr://$r")
+              done
+              copr-cli modify "$COPR_PROJECT" "${repo_args[@]}"
             fi
             bash packaging/build-srpm.sh --copr
           else

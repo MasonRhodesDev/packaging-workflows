@@ -7,6 +7,13 @@ on:
         description: Base name of the spec / rpmlintrc under packaging/ (e.g. sni-watcher)
         type: string
         required: true
+      extra-copr-repos:
+        description: >-
+          Whitespace-separated owner/project COPR repos enabled in the build
+          container so BuildRequires outside Fedora proper resolve
+          (e.g. "nett00n/hyprland")
+        type: string
+        default: ''
 
 jobs:
   rpm:
@@ -28,6 +35,13 @@ jobs:
 
       - name: Build SRPM from HEAD
         run: ./packaging/build-srpm.sh --head
+
+      - name: Enable extra COPR repos
+        if: inputs.extra-copr-repos != ''
+        run: |
+          for repo in ${{ inputs.extra-copr-repos }}; do
+            dnf -y copr enable "$repo"
+          done
 
       - name: Install BuildRequires
         run: dnf builddep -y ~/rpmbuild/SRPMS/${{ inputs.spec-name }}-*.src.rpm
