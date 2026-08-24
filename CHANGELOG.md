@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 — 2026-08-24
+
+`copr-chroots` input on release.yml: declares the COPR build-target set;
+used at project creation and enforced (copr-cli modify) on every release.
+Empty keeps prior behavior. First consumer: waybar-workspace-buttons,
+mirroring nett00n/hyprland's targets (f43/f44/f45/rawhide, x86_64+aarch64).
+
 ## 1.1.0 — 2026-08-24
 
 `extra-copr-repos` input on release.yml / rpm-check.yml: whitespace-separated

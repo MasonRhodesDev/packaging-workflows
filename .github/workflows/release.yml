@@ -44,6 +44,15 @@ on:
           container and attached to the COPR project as external repos.
         type: string
         default: ''
+      copr-chroots:
+        description: >-
+          Whitespace-separated COPR chroot names the project must build for
+          (e.g. "fedora-44-x86_64 fedora-rawhide-x86_64"). Used on project
+          creation and enforced on every release; empty keeps the default
+          set (fedora-43/44/rawhide x86_64) on create and leaves existing
+          projects untouched.
+        type: string
+        default: ''
       copr-project:
         description: "COPR project name (defaults to NAME in packaging/build-srpm.sh)"
         type: string
@@ -142,6 +151,7 @@ jobs:
           SPEC_NAME: ${{ inputs.spec-name }}
           COPR_ENABLE_NET: ${{ inputs.copr-enable-net }}
           EXTRA_COPR_REPOS: ${{ inputs.extra-copr-repos }}
+          COPR_CHROOTS: ${{ inputs.copr-chroots }}
         run: |
           set -euo pipefail
           if [ -z "$COPR_CONFIG" ] && [ -z "$COPR_WEBHOOK_URL" ]; then
@@ -164,12 +174,20 @@ jobs:
               exit 1
             fi
             export COPR_PROJECT
+            chroot_args=()
+            for c in ${COPR_CHROOTS:-}; do
+              chroot_args+=(--chroot "$c")
+            done
             if ! copr-cli list-packages "$COPR_PROJECT" >/dev/null 2>&1; then
               echo "==> creating COPR project $COPR_PROJECT"
-              copr-cli create "$COPR_PROJECT" \
-                --chroot fedora-43-x86_64 \
-                --chroot fedora-44-x86_64 \
-                --chroot fedora-rawhide-x86_64
+              if [ ${#chroot_args[@]} -eq 0 ]; then
+                chroot_args=(--chroot fedora-43-x86_64 --chroot fedora-44-x86_64 --chroot fedora-rawhide-x86_64)
+              fi
+              copr-cli create "$COPR_PROJECT" "${chroot_args[@]}"
+            elif [ ${#chroot_args[@]} -gt 0 ]; then
+              # Enforce the declared build-target set on every release so
+              # adding/dropping targets is a one-line consumer change.
+              copr-cli modify "$COPR_PROJECT" "${chroot_args[@]}"
             fi
             if [ "$COPR_ENABLE_NET" = "true" ]; then
               copr-cli modify "$COPR_PROJECT" --enable-net on
