@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.3 — 2026-10-12
+
+The aarch64 leg built successfully and uploaded nothing. makepkg inherits
+PKGDEST and PKGEXT from the container's makepkg.conf, which differs between
+the official x86_64 image and the ARM one, so the packages were written
+outside the PKGBUILD directory and every downstream glob came up empty —
+silently, because namcap is `|| true` and upload-artifact only warns.
+
+The build step now pins `PKGDEST="$PWD"` and `PKGEXT='.pkg.tar.zst'`, which
+is what the rest of the pipeline assumes, and asserts that each path from
+`makepkg --packagelist` exists. `upload-artifact` uses
+`if-no-files-found: error`, so a leg that produces nothing fails instead of
+reporting success.
+
 ## 1.3.2 — 2026-10-12
 
 1.3.1 put `DisableSandbox` at the end of `pacman.conf`, which lands inside
