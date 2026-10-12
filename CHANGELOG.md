@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0 — 2026-10-12
+
+arch-package.yml builds aarch64 alongside x86_64. A `plan` job intersects the
+new `architectures` input (default x86_64 + aarch64) with the PKGBUILD's own
+`arch=()`, so a project opts in by editing that one line and a project still
+on `arch=('x86_64')` keeps building exactly one leg — its release gate is
+unaffected. `arch=('any')` builds once, because arch-repo copies arch=any
+packages into every architecture's database.
+
+The ARM leg runs natively on `ubuntu-24.04-arm` (free for public
+repositories) in `menci/archlinuxarm:base-devel`, pinned by digest; Arch
+publishes no official aarch64 image. Artifacts are now named
+`arch-package-<arch>` and release.yml collects them with a pattern.
+
+Needed because the [mason] repo now serves a per-architecture directory
+(arch-repo#2) and an M1 MacBook Air on Asahi Alarm wants the same desktop
+packages the x86 machines get.
+
 ## 1.2.0 — 2026-08-24
 
 `copr-chroots` input on release.yml: declares the COPR build-target set;
