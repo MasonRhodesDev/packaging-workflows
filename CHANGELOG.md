@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.1 — 2026-10-12
+
+Fixes the aarch64 leg added in 1.3.0, which could not run pacman at all:
+pacman 7 downloads as the unprivileged `alpm` user behind a Landlock ruleset,
+and the arm64 runner's container cannot apply it ("Operation not permitted"),
+so database sync failed immediately. The ARM leg now sets `DisableSandbox` in
+`pacman.conf` — not `--disable-sandbox`, because `makepkg -s` calls pacman
+itself and would not inherit a flag. The x86_64 leg is untouched and keeps
+the sandbox.
+
 ## 1.3.0 — 2026-10-12
 
 arch-package.yml builds aarch64 alongside x86_64. A `plan` job intersects the
