@@ -61,6 +61,12 @@ on:
         description: copr-cli modify --enable-net on (needed when the RPM fetches crates)
         type: boolean
         default: false
+      architectures:
+        description: >-
+          Pass through to arch-package.yml. The PKGBUILD's arch=() still
+          decides what is built; this only narrows the candidates.
+        type: string
+        default: '["x86_64", "aarch64"]'
       skip-head-snapshot:
         description: Pass through to arch-package.yml for packaging-only upstream sources
         type: boolean
@@ -88,6 +94,7 @@ jobs:
       extra-repo-key-url: ${{ inputs.extra-repo-key-url }}
       extra-repo-key-fingerprint: ${{ inputs.extra-repo-key-fingerprint }}
       skip-head-snapshot: ${{ inputs.skip-head-snapshot }}
+      architectures: ${{ inputs.architectures }}
 
   rpm-check:
     if: inputs.rpm
@@ -114,7 +121,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
-          name: arch-package
+          # One artifact per architecture leg of arch-package's matrix.
+          pattern: arch-package-*
+          merge-multiple: true
           path: dist
       - name: Publish package assets
         env:

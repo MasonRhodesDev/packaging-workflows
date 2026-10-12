@@ -32,12 +32,81 @@ on:
           Use for packaging-only repos whose source= is an upstream tarball.
         type: boolean
         default: false
+      architectures:
+        description: >-
+          JSON array of architectures to consider. The PKGBUILD's own arch=()
+          decides what is actually built, so adding aarch64 there is the only
+          change a project needs; this input exists to withhold one anyway.
+        type: string
+        default: '["x86_64", "aarch64"]'
 
 jobs:
-  makepkg:
-    name: makepkg → namcap
+  # The PKGBUILD's arch=() is the source of truth for which architectures a
+  # package supports, so a project opts into aarch64 by editing one line there
+  # rather than by also passing an input here. Intersecting the two means a
+  # project still on arch=('x86_64') keeps building exactly one leg and its
+  # release gate keeps passing, instead of acquiring a leg that cannot work.
+  plan:
+    name: Resolve architectures
     runs-on: ubuntu-latest
-    container: archlinux:latest@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1
+    outputs:
+      architectures: ${{ steps.resolve.outputs.architectures }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      # Inlined rather than a script file: actions/checkout in a reusable
+      # workflow checks out the CALLER's repository, so a script committed
+      # here would not be present in this working directory.
+      - name: Intersect requested architectures with the PKGBUILD
+        id: resolve
+        env:
+          REQUESTED: ${{ inputs.architectures }}
+          PKGBUILD_DIR: ${{ inputs.pkgbuild-dir }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, re, sys
+
+          requested = json.loads(os.environ["REQUESTED"])
+          pkgbuild = os.path.join(os.environ["PKGBUILD_DIR"], "PKGBUILD")
+          text = open(pkgbuild, encoding="utf-8").read()
+
+          match = re.search(r"^arch=\(([^)]*)\)", text, re.MULTILINE)
+          if not match:
+              sys.exit(f"::error::no arch=() found in {pkgbuild}")
+          declared = re.findall(r"[A-Za-z0-9_]+", match.group(1))
+
+          # An arch=('any') package is architecture-independent: build it once.
+          # arch-repo copies arch=any packages into every architecture's
+          # database, so a second identical build would be wasted work.
+          if "any" in declared:
+              resolved = ["x86_64"]
+          else:
+              resolved = [a for a in requested if a in declared]
+
+          if not resolved:
+              sys.exit(
+                  f"::error::none of the requested architectures {requested} "
+                  f"are declared in {pkgbuild} (arch={declared})"
+              )
+
+          print(f"PKGBUILD declares {declared}; requested {requested}")
+          print(f"building: {resolved}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"architectures={json.dumps(resolved)}\n")
+          EOF
+
+  makepkg:
+    name: makepkg → namcap (${{ matrix.arch }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(needs.plan.outputs.architectures) }}
+    # Arch publishes no official aarch64 image, so the ARM leg uses
+    # menci/archlinuxarm (Arch Linux ARM, multi-arch, rebuilt daily), pinned by
+    # digest exactly as the x86_64 leg pins the official image.
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    container: ${{ matrix.arch == 'aarch64' && 'menci/archlinuxarm:base-devel@sha256:3ede3a01ca0e0dc89fb6a539be60d836ff0b2aed724832dc5cefd00d22b5f04e' || 'archlinux:latest@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1' }}
     steps:
       - name: Install build tooling
         run: >-
@@ -142,7 +211,7 @@ jobs:
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
-          name: arch-package
+          name: arch-package-${{ matrix.arch }}
           path: ${{ inputs.pkgbuild-dir }}/*.pkg.tar.zst
 
       - name: Upload to GitHub Release
