@@ -118,8 +118,15 @@ jobs:
       - name: Disable pacman's download sandbox (aarch64 container)
         if: matrix.arch == 'aarch64'
         run: |
-          printf '\nDisableSandbox\n' >> /etc/pacman.conf
-          grep -q '^DisableSandbox$' /etc/pacman.conf
+          # DisableSandbox is an [options] directive, so it has to go inside
+          # that section. Appending to the end of the file puts it in whatever
+          # repo section happens to be last ([aur] in this image), where
+          # pacman ignores it with only a warning.
+          sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+          # pacman-conf resolves the effective configuration, so this fails if
+          # the directive landed in the wrong section rather than passing on a
+          # grep of the raw file.
+          pacman-conf DisableSandbox
 
       - name: Install build tooling
         run: >-
