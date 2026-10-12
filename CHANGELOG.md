@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2 — 2026-10-12
+
+1.3.1 put `DisableSandbox` at the end of `pacman.conf`, which lands inside
+whatever repo section is last — `[aur]` in the ARM image — where pacman
+ignores it with only a warning, so the Landlock failure persisted. It now
+goes into `[options]`, and the step asserts with `pacman-conf DisableSandbox`
+so a wrong section fails the step instead of passing a grep of the raw file.
+
 ## 1.3.1 — 2026-10-12
 
 Fixes the aarch64 leg added in 1.3.0, which could not run pacman at all:
