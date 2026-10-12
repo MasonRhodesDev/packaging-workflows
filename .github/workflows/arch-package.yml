@@ -108,6 +108,19 @@ jobs:
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container: ${{ matrix.arch == 'aarch64' && 'menci/archlinuxarm:base-devel@sha256:3ede3a01ca0e0dc89fb6a539be60d836ff0b2aed724832dc5cefd00d22b5f04e' || 'archlinux:latest@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1' }}
     steps:
+      # pacman 7 downloads as the unprivileged 'alpm' user behind a Landlock
+      # ruleset. The arm64 runner's container cannot apply that ruleset
+      # ("Operation not permitted"), so every pacman call fails before it
+      # syncs. Disabling it in pacman.conf rather than passing
+      # --disable-sandbox, because makepkg -s invokes pacman itself and would
+      # not inherit the flag. Scoped to this leg: the x86_64 container applies
+      # the ruleset fine and keeps the sandbox.
+      - name: Disable pacman's download sandbox (aarch64 container)
+        if: matrix.arch == 'aarch64'
+        run: |
+          printf '\nDisableSandbox\n' >> /etc/pacman.conf
+          grep -q '^DisableSandbox$' /etc/pacman.conf
+
       - name: Install build tooling
         run: >-
           pacman -Syu --noconfirm --needed base-devel git sudo namcap
