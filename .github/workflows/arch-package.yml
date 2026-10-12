@@ -224,7 +224,28 @@ jobs:
       - name: Build package
         run: |
           cd "${{ inputs.pkgbuild-dir }}"
-          su builder -c 'makepkg -s --noconfirm'
+          # Pin PKGDEST and PKGEXT instead of inheriting them. The official
+          # x86_64 image and the ARM one do not agree, and everything
+          # downstream — the namcap glob, the artifact glob, arch-repo's
+          # collector and repo-add — assumes *.pkg.tar.zst sitting beside the
+          # PKGBUILD. On the ARM image the build succeeded and wrote its
+          # packages somewhere else, so the glob was empty and the job went
+          # green having produced nothing.
+          su builder -c "PKGDEST='$PWD' PKGEXT='.pkg.tar.zst' makepkg -s --noconfirm"
+          # Assert that what makepkg says it built is actually here. Without
+          # this, an empty output is invisible: namcap is `|| true` and
+          # upload-artifact only warns.
+          su builder -c "PKGDEST='$PWD' PKGEXT='.pkg.tar.zst' makepkg --packagelist" > /tmp/packagelist
+          missing=0
+          while read -r pkg; do
+            if [ ! -f "$pkg" ]; then
+              echo "::error::makepkg reported $pkg but it was not produced"
+              missing=1
+            fi
+          done < /tmp/packagelist
+          [ "$missing" -eq 0 ]
+          echo "built:"
+          ls -1 ./*.pkg.tar.zst
 
       - name: namcap (informational)
         run: namcap "${{ inputs.pkgbuild-dir }}"/*.pkg.tar.zst || true
@@ -233,6 +254,9 @@ jobs:
         with:
           name: arch-package-${{ matrix.arch }}
           path: ${{ inputs.pkgbuild-dir }}/*.pkg.tar.zst
+          # Default is to warn and upload nothing, which let an ARM leg that
+          # built into the wrong directory report success.
+          if-no-files-found: error
 
       - name: Upload to GitHub Release
         if: inputs.publish && startsWith(github.ref, 'refs/tags/')
