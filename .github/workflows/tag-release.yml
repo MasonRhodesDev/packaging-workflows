@@ -1,0 +1,110 @@
+name: Tag release (reusable)
+
+# Call on push to main. Reads the Conventional Commits subjects since the
+# last vMAJOR.MINOR.PATCH tag, picks the next version, tags this commit,
+# and starts the caller's release workflow on that tag.
+#
+#   breaking (type!: or a BREAKING CHANGE: footer)   major
+#   feat                                             minor
+#   fix, perf, revert                                patch
+#
+# Before 1.0.0 each level drops by one: breaking is a minor bump and
+# everything else that releases is a patch bump. Any other commit type
+# releases nothing. With no tag yet, the first release is v0.1.0.
+#
+# The tag is the version. Callers pass version-from-tag: true to
+# release.yml so the package takes its version from the tag and no file
+# in git has to be edited to release.
+#
+# The release workflow is started by workflow_dispatch because a tag that
+# GITHUB_TOKEN pushes does not start workflows. It must accept
+# workflow_dispatch. The caller grants contents: write and actions: write.
+
+on:
+  workflow_call:
+    inputs:
+      release-workflow:
+        description: File name of the caller's release workflow to start on the new tag
+        type: string
+        default: release.yml
+    outputs:
+      tag:
+        description: The tag created, or empty when nothing was released
+        value: ${{ jobs.tag.outputs.tag }}
+
+jobs:
+  tag:
+    name: Next version from commits
+    runs-on: ubuntu-latest
+    concurrency:
+      group: tag-release
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Inlined rather than a script file: actions/checkout in a reusable
+      # workflow checks out the CALLER's repository.
+      - name: Pick the next version
+        id: next
+        run: |
+          set -euo pipefail
+          if [ -n "$(git tag --points-at HEAD 'v*')" ]; then
+            echo "HEAD is already tagged $(git tag --points-at HEAD 'v*' | head -n 1)"
+            exit 0
+          fi
+          last=$(git tag --merged HEAD -l 'v*' --sort=-v:refname |
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          if [ -z "$last" ]; then
+            echo "tag=v0.1.0" >> "$GITHUB_OUTPUT"
+            echo "no release tag yet: v0.1.0"
+            exit 0
+          fi
+
+          scope='(\([^)]+\))?'
+          subjects=$(git log --format=%s "$last..HEAD")
+          bodies=$(git log --format=%b "$last..HEAD")
+          if grep -Eq "^[a-z]+$scope!: " <<<"$subjects" ||
+             grep -Eq '^BREAKING[ -]CHANGE: ' <<<"$bodies"; then
+            level=major
+          elif grep -Eq "^feat$scope: " <<<"$subjects"; then
+            level=minor
+          elif grep -Eq "^(fix|perf|revert)$scope: " <<<"$subjects"; then
+            level=patch
+          else
+            echo "::notice::no feat, fix, perf, revert or breaking commit since $last: nothing to release"
+            exit 0
+          fi
+
+          IFS=. read -r major minor patch <<<"${last#v}"
+          if [ "$major" -eq 0 ]; then
+            case $level in
+              major) level=minor ;;
+              *) level=patch ;;
+            esac
+          fi
+          case $level in
+            major) tag="v$((major + 1)).0.0" ;;
+            minor) tag="v$major.$((minor + 1)).0" ;;
+            patch) tag="v$major.$minor.$((patch + 1))" ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "$last -> $tag ($level)"
+
+      - name: Tag and start the release
+        if: steps.next.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.next.outputs.tag }}
+          RELEASE_WORKFLOW: ${{ inputs.release-workflow }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+          gh workflow run "$RELEASE_WORKFLOW" --ref "$TAG"

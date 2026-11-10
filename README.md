@@ -36,6 +36,7 @@ CI then moves the floating `vMAJOR` and `vMAJOR.MINOR` tags (see
 | `rpm-check.yml` | SRPM from HEAD → `rpmbuild --rebuild` (runs `%check`) → gating rpmlint in a `fedora` container | `spec-name` |
 | `release.yml` | On tag: Arch + RPM gates → GitHub Release → COPR submit → arch-repo dispatch. COPR and `ARCH_REPO_TOKEN` are required when `rpm: true`. Missing secrets fail the release. COPR projects are created from CI if absent. | `pkgbuild-dir`, `spec-name`, `rpm`, `copr-project`, `copr-enable-net`; secrets `COPR_CONFIG` (required for rpm repos; token expires ~180d), `COPR_WEBHOOK_URL` (fallback), `ARCH_REPO_TOKEN` (required) |
 | `security.yml` | cargo-deny (advisories/licenses/bans/sources) | — |
+| `tag-release.yml` | On push to main: next version from Conventional Commits since the last tag (breaking = major, `feat` = minor, `fix`/`perf`/`revert` = patch; one level lower before 1.0.0), tags the commit, starts the caller's release workflow on the tag. Other commit types release nothing. | `release-workflow`; caller grants `contents: write`, `actions: write` |
 | `crates-publish.yml` | `cargo publish --locked` on a `v*` tag | secret `CARGO_REGISTRY_TOKEN` (required; org Actions secret) |
 
 ## Per-repo contract
@@ -71,6 +72,23 @@ jobs:
     uses: MasonRhodesDev/packaging-workflows/.github/workflows/release.yml@v1
     secrets: inherit
 ```
+
+```yaml
+# .github/workflows/tag.yml — optional: release from commit messages instead of a hand-pushed tag
+name: Tag
+on: { push: { branches: [main] } }
+permissions: { contents: write, actions: write }
+jobs:
+  tag:
+    uses: MasonRhodesDev/packaging-workflows/.github/workflows/tag-release.yml@v1
+```
+
+With `tag.yml`, the release workflow also needs `workflow_dispatch:` in its
+`on:`, and passes `version-from-tag: true` so the tag sets `pkgver`. The tag
+is then the one version every channel publishes. `version-from-tag` stamps
+the PKGBUILD only: a repo with a version in `Cargo.toml` or an RPM spec
+still fails the version gate until those match the tag, so such repos keep
+tagging by hand for now.
 
 ## Release flow (any repo)
 

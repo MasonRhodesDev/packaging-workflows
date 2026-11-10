@@ -71,6 +71,10 @@ on:
         description: Pass through to arch-package.yml for packaging-only upstream sources
         type: boolean
         default: false
+      version-from-tag:
+        description: Pass through to arch-package.yml. The package takes its version from the tag.
+        type: boolean
+        default: false
     secrets:
       COPR_CONFIG:
         description: Content of ~/.config/copr (copr-cli token file) — builds the SRPM in CI and submits it directly (optional; note the token expires ~180 days)
@@ -95,6 +99,7 @@ jobs:
       extra-repo-key-fingerprint: ${{ inputs.extra-repo-key-fingerprint }}
       skip-head-snapshot: ${{ inputs.skip-head-snapshot }}
       architectures: ${{ inputs.architectures }}
+      version-from-tag: ${{ inputs.version-from-tag }}
 
   rpm-check:
     if: inputs.rpm

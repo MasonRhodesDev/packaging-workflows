@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.0 — 2026-11-10
+
+`tag-release.yml` picks the next version from the Conventional Commits
+subjects since the last tag, tags the commit, and starts the caller's
+release workflow on that tag. Breaking is major, `feat` is minor, `fix`,
+`perf` and `revert` are patch, and each drops one level before 1.0.0. Other
+commit types release nothing.
+
+`version-from-tag` on `release.yml` and `arch-package.yml` sets `pkgver`
+from the tag in the runner's copy of the PKGBUILD, so a release needs no
+version edit in git. It does not stamp `Cargo.toml` or an RPM spec, so only
+repos without a version in their source can use it yet. Both are opt-in;
+existing callers are unchanged.
+
 ## 1.3.3 — 2026-10-12
 
 The aarch64 leg built successfully and uploaded nothing. makepkg inherits

@@ -39,6 +39,14 @@ on:
           change a project needs; this input exists to withhold one anyway.
         type: string
         default: '["x86_64", "aarch64"]'
+      version-from-tag:
+        description: >-
+          On a tag build, set pkgver to the tag and pkgrel to 1 in the
+          runner's copy of the PKGBUILD, so the tag alone decides the
+          version (see tag-release.yml). A Cargo.toml version still has to
+          match, so this suits repos with no version in their source.
+        type: boolean
+        default: false
 
 jobs:
   # The PKGBUILD's arch=() is the source of truth for which architectures a
@@ -164,6 +172,12 @@ jobs:
 
       - name: Trust the checkout (container runs as root)
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Take the version from the tag
+        if: inputs.version-from-tag && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          sed -i -e "s/^pkgver=.*/pkgver=${GITHUB_REF_NAME#v}/" -e 's/^pkgrel=.*/pkgrel=1/' \
+            "${{ inputs.pkgbuild-dir }}/PKGBUILD"
 
       - name: Version consistency gate (tag builds)
         if: startsWith(github.ref, 'refs/tags/v')
