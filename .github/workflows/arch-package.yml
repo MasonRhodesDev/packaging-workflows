@@ -49,11 +49,6 @@ on:
         default: false
 
 jobs:
-  # The PKGBUILD's arch=() is the source of truth for which architectures a
-  # package supports, so a project opts into aarch64 by editing one line there
-  # rather than by also passing an input here. Intersecting the two means a
-  # project still on arch=('x86_64') keeps building exactly one leg and its
-  # release gate keeps passing, instead of acquiring a leg that cannot work.
   plan:
     name: Resolve architectures
     runs-on: ubuntu-latest
@@ -62,9 +57,6 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
-      # Inlined rather than a script file: actions/checkout in a reusable
-      # workflow checks out the CALLER's repository, so a script committed
-      # here would not be present in this working directory.
       - name: Intersect requested architectures with the PKGBUILD
         id: resolve
         env:
@@ -83,9 +75,6 @@ jobs:
               sys.exit(f"::error::no arch=() found in {pkgbuild}")
           declared = re.findall(r"[A-Za-z0-9_]+", match.group(1))
 
-          # An arch=('any') package is architecture-independent: build it once.
-          # arch-repo copies arch=any packages into every architecture's
-          # database, so a second identical build would be wasted work.
           if "any" in declared:
               resolved = ["x86_64"]
           else:
@@ -110,30 +99,13 @@ jobs:
       fail-fast: false
       matrix:
         arch: ${{ fromJSON(needs.plan.outputs.architectures) }}
-    # Arch publishes no official aarch64 image, so the ARM leg uses
-    # menci/archlinuxarm (Arch Linux ARM, multi-arch, rebuilt daily), pinned by
-    # digest exactly as the x86_64 leg pins the official image.
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container: ${{ matrix.arch == 'aarch64' && 'menci/archlinuxarm:base-devel@sha256:3ede3a01ca0e0dc89fb6a539be60d836ff0b2aed724832dc5cefd00d22b5f04e' || 'archlinux:latest@sha256:b0deabeb3d283da2c7f7dbf0eea051b7b2cd0554e0b737cc457fd21683bdcdd1' }}
     steps:
-      # pacman 7 downloads as the unprivileged 'alpm' user behind a Landlock
-      # ruleset. The arm64 runner's container cannot apply that ruleset
-      # ("Operation not permitted"), so every pacman call fails before it
-      # syncs. Disabling it in pacman.conf rather than passing
-      # --disable-sandbox, because makepkg -s invokes pacman itself and would
-      # not inherit the flag. Scoped to this leg: the x86_64 container applies
-      # the ruleset fine and keeps the sandbox.
       - name: Disable pacman's download sandbox (aarch64 container)
         if: matrix.arch == 'aarch64'
         run: |
-          # DisableSandbox is an [options] directive, so it has to go inside
-          # that section. Appending to the end of the file puts it in whatever
-          # repo section happens to be last ([aur] in this image), where
-          # pacman ignores it with only a warning.
           sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
-          # pacman-conf resolves the effective configuration, so this fails if
-          # the directive landed in the wrong section rather than passing on a
-          # grep of the raw file.
           pacman-conf DisableSandbox
 
       - name: Install build tooling
@@ -165,9 +137,6 @@ jobs:
           pacman-key --add /tmp/extra-repo.asc
           pacman-key --lsign-key "$KEY_FINGERPRINT"
           printf '%s\n' "$EXTRA_REPOS" >> /etc/pacman.conf
-          # The repository is appended after the base system upgrade above,
-          # so its database is not present yet.  Synchronize before makepkg
-          # asks pacman to resolve dependencies from the newly trusted repo.
           pacman -Sy --noconfirm
 
       - name: Trust the checkout (container runs as root)
@@ -185,8 +154,6 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           pkgver=$(sed -n 's/^pkgver=//p' "${{ inputs.pkgbuild-dir }}/PKGBUILD")
           pkgrel=$(sed -n 's/^pkgrel=//p' "${{ inputs.pkgbuild-dir }}/PKGBUILD")
-          # Packaging-only rebuilds (e.g. overskride) keep upstream pkgver and
-          # tag v$pkgver-$pkgrel so a second release does not move v$pkgver.
           if [ "$tag" != "$pkgver" ] && [ "$tag" != "${pkgver}-${pkgrel}" ]; then
             echo "::error::tag v$tag does not match PKGBUILD pkgver=$pkgver (or pkgver-pkgrel $pkgver-$pkgrel)"
             exit 1
@@ -213,42 +180,22 @@ jobs:
           echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
           chown -R builder: "$GITHUB_WORKSPACE"
 
-      # The PKGBUILD's source entry is named $pkgname-$pkgver.tar.gz; providing
-      # the file locally makes makepkg skip the download. Tag builds need this
-      # too: the PKGBUILD lives inside the GitHub archive it checksums, so a
-      # committed sha256 cannot match that same tag's auto-archive.
       - name: Snapshot source tarball from HEAD
         if: ${{ !inputs.skip-head-snapshot }}
         run: |
           cd "${{ inputs.pkgbuild-dir }}"
-          # Split packages: source tarball is named after pkgbase; scalar
-          # single-package repos have no pkgbase= line, fall back to pkgname=.
           pkgbase=$(sed -n 's/^pkgbase=//p' PKGBUILD)
           [ -n "$pkgbase" ] || pkgbase=$(sed -n 's/^pkgname=//p' PKGBUILD)
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
           git -C "$GITHUB_WORKSPACE" archive --format=tar.gz \
             --prefix "$pkgbase-$pkgver/" -o "$PWD/$pkgbase-$pkgver.tar.gz" HEAD
           chown builder: "$PWD/$pkgbase-$pkgver.tar.gz" PKGBUILD
-          # The committed checksum authenticates the immutable release archive.
-          # Branch builds use a temporary HEAD snapshot, so update only the
-          # runner's working copy before exercising the package build.
-          # updpkgsums wraps makepkg, which refuses to run as root.
           su builder -c 'updpkgsums'
 
       - name: Build package
         run: |
           cd "${{ inputs.pkgbuild-dir }}"
-          # Pin PKGDEST and PKGEXT instead of inheriting them. The official
-          # x86_64 image and the ARM one do not agree, and everything
-          # downstream — the namcap glob, the artifact glob, arch-repo's
-          # collector and repo-add — assumes *.pkg.tar.zst sitting beside the
-          # PKGBUILD. On the ARM image the build succeeded and wrote its
-          # packages somewhere else, so the glob was empty and the job went
-          # green having produced nothing.
           su builder -c "PKGDEST='$PWD' PKGEXT='.pkg.tar.zst' makepkg -s --noconfirm"
-          # Assert that what makepkg says it built is actually here. Without
-          # this, an empty output is invisible: namcap is `|| true` and
-          # upload-artifact only warns.
           su builder -c "PKGDEST='$PWD' PKGEXT='.pkg.tar.zst' makepkg --packagelist" > /tmp/packagelist
           missing=0
           while read -r pkg; do
@@ -268,8 +215,6 @@ jobs:
         with:
           name: arch-package-${{ matrix.arch }}
           path: ${{ inputs.pkgbuild-dir }}/*.pkg.tar.zst
-          # Default is to warn and upload nothing, which let an ARM leg that
-          # built into the wrong directory report success.
           if-no-files-found: error
 
       - name: Upload to GitHub Release

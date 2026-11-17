@@ -1,12 +1,5 @@
 name: Release (reusable)
 
-# Call on push of a v* tag. Builds the Arch package, attaches it to the
-# GitHub Release, submits COPR, and dispatches arch-repo. COPR and
-# [mason] are required for rpm-enabled repos: missing COPR_CONFIG /
-# COPR_WEBHOOK_URL or ARCH_REPO_TOKEN fails the release. COPR projects
-# are created from CI when absent. rpm: false (e.g. deck-tenant) skips
-# the COPR job only.
-
 on:
   workflow_call:
     inputs:
@@ -126,7 +119,6 @@ jobs:
     steps:
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
-          # One artifact per architecture leg of arch-package's matrix.
           pattern: arch-package-*
           merge-multiple: true
           path: dist
@@ -134,7 +126,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # This job has no checkout; pass -R so gh does not shell out to git.
           repo="${{ github.repository }}"
           if ! gh release view "$GITHUB_REF_NAME" -R "$repo" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" -R "$repo" --generate-notes
@@ -148,9 +139,6 @@ jobs:
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:42@sha256:e78cd1a688cd079c23864f289a89a49a3f4ad66d817864e325e1d058310ee95c
     steps:
-      # Install git BEFORE checkout: in a container job actions/checkout
-      # otherwise falls back to an API tarball (no .git, no tags) and
-      # build-srpm.sh's tag gate fails with "not a git repository".
       - name: Install build tooling
         run: dnf -y install git-core copr-cli rpm-build rpmlint rust cargo curl-minimal
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -199,16 +187,12 @@ jobs:
               fi
               copr-cli create "$COPR_PROJECT" "${chroot_args[@]}"
             elif [ ${#chroot_args[@]} -gt 0 ]; then
-              # Enforce the declared build-target set on every release so
-              # adding/dropping targets is a one-line consumer change.
               copr-cli modify "$COPR_PROJECT" "${chroot_args[@]}"
             fi
             if [ "$COPR_ENABLE_NET" = "true" ]; then
               copr-cli modify "$COPR_PROJECT" --enable-net on
             fi
             if [ -n "$EXTRA_COPR_REPOS" ]; then
-              # --repo REPLACES the external-repo list, so pass the full
-              # desired set each run (idempotent).
               repo_args=()
               for r in $EXTRA_COPR_REPOS; do
                 repo_args+=(--repo "copr://$r")

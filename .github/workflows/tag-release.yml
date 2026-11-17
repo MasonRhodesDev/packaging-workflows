@@ -1,25 +1,5 @@
 name: Tag release (reusable)
 
-# Call on push to main. Reads the Conventional Commits subjects since the
-# last vMAJOR.MINOR.PATCH tag, picks the next version, tags this commit,
-# and starts the caller's release workflow on that tag.
-#
-#   breaking (type!: or a BREAKING CHANGE: footer)   major
-#   feat                                             minor
-#   fix, perf, revert                                patch
-#
-# Before 1.0.0 each level drops by one: breaking is a minor bump and
-# everything else that releases is a patch bump. Any other commit type
-# releases nothing. With no tag yet, the first release is v0.1.0.
-#
-# The tag is the version. Callers pass version-from-tag: true to
-# release.yml so the package takes its version from the tag and no file
-# in git has to be edited to release.
-#
-# The release workflow is started by workflow_dispatch because a tag that
-# GITHUB_TOKEN pushes does not start workflows. It must accept
-# workflow_dispatch. The caller grants contents: write and actions: write.
-
 on:
   workflow_call:
     inputs:
@@ -47,8 +27,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # Inlined rather than a script file: actions/checkout in a reusable
-      # workflow checks out the CALLER's repository.
       - name: Pick the next version
         id: next
         run: |
