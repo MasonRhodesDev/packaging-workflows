@@ -1,9 +1,5 @@
 name: Float version tags
 
-# Immutable tags are vMAJOR.MINOR.PATCH. After each of those, this job
-# moves the floating vMAJOR and vMAJOR.MINOR tags so callers on @v1 /
-# @v1.0 pick up compatible releases. Patch tags are never moved.
-
 on:
   push:
     tags:
